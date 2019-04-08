@@ -1,0 +1,8 @@
+<html>
+<head>
+<!--<?xml version="1.0" encoding="UTF-8"?><WISPAccessGatewayParam xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.acmewisp.com/WISPAccessGatewayParam.xsd">	<Redirect>		<AccessProcedure>1.0</AccessProcedure>		<AccessLocation>QookNShow</AccessLocation>		<LocationName>QookNShow</LocationName>		<LoginURL>https://first.wifi.olleh.com/webauth/wispr/login.php?ip=121.170.189.197&mac=f01898a60f82</LoginURL>		<MessageType>100</MessageType>		<ResponseCode>0</ResponseCode>	</Redirect></WISPAccessGatewayParam>--> 
+	<script>
+	 location.href = "http://first.wifi.olleh.com/webauth/redirection.php?ip=121.170.189.197&mac=f01898a60f82&url=http://download.wikimedia.org&ssid=KT_starbucks&ap_mac=00300d88fd0f&apmodel=MW-6900AP";
+	</script>
+</head>
+</html>
