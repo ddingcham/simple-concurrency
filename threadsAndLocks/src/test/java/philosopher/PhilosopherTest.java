@@ -35,6 +35,26 @@ public class PhilosopherTest {
     }
 
     @Test
+    public void deadLock_with_num_of_threads() throws InterruptedException {
+        final int numOfPhilosophers = 4;
+        Philosopher[] philosophers = new Philosopher[numOfPhilosophers];
+        for(int i = 0 ; i < numOfPhilosophers ; i++) {
+            if (i < numOfPhilosophers/2) {
+                philosophers[i] = new Philosopher(left, right);
+            }
+            else {
+                philosophers[i] = new Philosopher(right, left);
+            }
+        }
+        for(Philosopher philosopher : philosophers) {
+            philosopher.start();
+        }
+        for(Philosopher philosopher : philosophers) {
+            philosopher.join();
+        }
+    }
+
+    @Test
     public void resolve_deadLock_with_global_lock_ordering_rule() throws InterruptedException {
         Philosopher philosopher1 = new ResolvingDeadLock(left, right);
         Philosopher philosopher2 = new ResolvingDeadLock(right, left);
