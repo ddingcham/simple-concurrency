@@ -1,11 +1,17 @@
 package philosopher;
 
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.Random;
 
 public class Philosopher extends Thread {
+    @Getter(AccessLevel.PROTECTED) @Setter(AccessLevel.PROTECTED)
     private Chopstick first;
+    @Getter(AccessLevel.PROTECTED) @Setter(AccessLevel.PROTECTED)
     private Chopstick second;
-    private Random random;
+    protected Random random;
 
     public Philosopher(Chopstick left, Chopstick right) {
         init(left, right);
@@ -32,13 +38,5 @@ public class Philosopher extends Thread {
         } catch(InterruptedException e) {
             e.printStackTrace();
         }
-    }
-
-    void setFirst(Chopstick first) {
-        this.first = first;
-    }
-
-    void setSecond(Chopstick second) {
-        this.second = second;
     }
 }

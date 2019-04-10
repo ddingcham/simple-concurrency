@@ -1,54 +1,126 @@
 package philosopher;
 
-import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Random;
+import java.lang.reflect.Constructor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
+import static org.junit.Assert.fail;
+
 public class PhilosopherTest {
 
-    Chopstick left;
-    Chopstick right;
+    Philosopher[] philosophers;
 
-    @Before
-    public void setUp() {
-        left = new Chopstick(1);
-        right = new Chopstick(2);
-    }
-
-    @Test
+    @Test(timeout = 15000)
     public void deadLock() throws InterruptedException {
-        Philosopher philosopher1 = new Philosopher(left, right);
-        Philosopher philosopher2 = new Philosopher(right, left);
-        Philosopher philosopher3 = new Philosopher(left, right);
-        Philosopher philosopher4 = new Philosopher(right, left);
-        Philosopher philosopher5 = new Philosopher(left, right);
-
-        philosopher1.start();
-        philosopher2.start();
-        philosopher3.start();
-        philosopher4.start();
-        philosopher5.start();
-        philosopher1.join();
-        philosopher2.join();
-        philosopher3.join();
-        philosopher4.join();
-        philosopher5.join();
+        initPhilosophers(Philosopher.class
+                , new DefaultChopStick(1), new DefaultChopStick(2)
+                , 5);
+        runPhilosophers();
     }
 
-    @Test
-    public void deadLock_with_num_of_threads() throws InterruptedException {
-        final int numOfPhilosophers = 4;
-        Philosopher[] philosophers = new Philosopher[numOfPhilosophers];
-        for (int i = 0; i < numOfPhilosophers; i++) {
-            if (i < numOfPhilosophers / 2) {
-                philosophers[i] = new Philosopher(left, right);
+    static class ResolvingDeadLockViaGlobalOrderingRule extends Philosopher {
+        public ResolvingDeadLockViaGlobalOrderingRule(Chopstick left, Chopstick right) {
+            super(left, right);
+        }
+
+        @Override
+        protected void init(Chopstick left, Chopstick right) {
+            if (left.getId() < right.getId()) {
+                setFirst(left);
+                setSecond(right);
             } else {
-                philosophers[i] = new Philosopher(right, left);
+                setFirst(right);
+                setSecond(left);
             }
         }
+    }
+
+    @Test(timeout = 10000)
+    public void resolve_deadLock_with_global_lock_ordering_rule() throws InterruptedException {
+        initPhilosophers(
+                ResolvingDeadLockViaGlobalOrderingRule.class
+                , new DefaultChopStick(1), new DefaultChopStick(2)
+                , 5);
+        runPhilosophers();
+    }
+
+    static class ReentrantLockableChopstick extends ReentrantLock implements Chopstick {
+        @Override
+        public int getId() {
+            return 0;
+        }
+    }
+
+    static class ResolvingDeadLockViaTimeout extends Philosopher {
+        public ResolvingDeadLockViaTimeout(Chopstick left, Chopstick right) {
+            super(left, right);
+        }
+
+        @Override
+        public void run() {
+            if (!canConvertChopstickToReentrantLock()) {
+                fail("Chopstick must be able to be converted ReentrantLock");
+            }
+
+            ReentrantLock firstLock = (ReentrantLock) getFirst();
+            ReentrantLock secondLock = (ReentrantLock) getSecond();
+            try {
+                while (true) {
+                    Thread.sleep(random.nextInt(1000));
+                    firstLock.lock();
+                    try {
+                        if (secondLock.tryLock(1000, TimeUnit.MILLISECONDS)) {
+                            try {
+                                Thread.sleep(random.nextInt(1000));
+                            } finally {
+                                secondLock.unlock();
+                            }
+                        } else {
+                            System.out.println(this + " can't eat so thinking again");
+                        }
+                        System.out.println(this + " eat with " + firstLock + " , " + secondLock);
+                    } finally {
+                        firstLock.unlock();
+                    }
+                }
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        private boolean canConvertChopstickToReentrantLock() {
+            return getFirst() instanceof ReentrantLock && getSecond() instanceof ReentrantLock;
+        }
+    }
+
+    @Test(timeout = 10000)
+    public void resolve_deadLock_with_timeout() throws InterruptedException {
+        initPhilosophers(ResolvingDeadLockViaTimeout.class
+                , new ReentrantLockableChopstick(), new ReentrantLockableChopstick()
+                , 5);
+        runPhilosophers();
+    }
+
+    private void initPhilosophers(Class<? extends Philosopher> philosopher, Chopstick left, Chopstick right, int numOfPhilosophers) {
+        philosophers = new Philosopher[numOfPhilosophers];
+        try {
+            Constructor<? extends Philosopher> philosopherConstructor = philosopher.getConstructor(Chopstick.class, Chopstick.class);
+            for (int i = 0; i < numOfPhilosophers; i++) {
+                if (i < numOfPhilosophers / 2) {
+                    philosophers[i] = philosopherConstructor.newInstance(left, right);
+                } else {
+                    philosophers[i] = philosopherConstructor.newInstance(right, left);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            fail();
+        }
+    }
+
+    private void runPhilosophers() throws InterruptedException {
         for (Philosopher philosopher : philosophers) {
             philosopher.start();
         }
@@ -57,100 +129,16 @@ public class PhilosopherTest {
         }
     }
 
-    @Test
-    public void resolve_deadLock_with_global_lock_ordering_rule() throws InterruptedException {
-        class ResolvingDeadLockViaGlobalOrderingRule extends Philosopher {
-            public ResolvingDeadLockViaGlobalOrderingRule(Chopstick left, Chopstick right) {
-                super(left, right);
-            }
+    static class DefaultChopStick implements Chopstick {
+        private final int id;
 
-            @Override
-            protected void init(Chopstick left, Chopstick right) {
-                if (left.getId() < right.getId()) {
-                    setFirst(left);
-                    setSecond(right);
-                } else {
-                    setFirst(right);
-                    setSecond(left);
-                }
-            }
+        public DefaultChopStick(int id) {
+            this.id = id;
         }
-        Philosopher philosopher1 = new ResolvingDeadLockViaGlobalOrderingRule(left, right);
-        Philosopher philosopher2 = new ResolvingDeadLockViaGlobalOrderingRule(right, left);
-        Philosopher philosopher3 = new ResolvingDeadLockViaGlobalOrderingRule(left, right);
-        Philosopher philosopher4 = new ResolvingDeadLockViaGlobalOrderingRule(right, left);
-        Philosopher philosopher5 = new ResolvingDeadLockViaGlobalOrderingRule(left, right);
 
-        philosopher1.start();
-        philosopher2.start();
-        philosopher3.start();
-        philosopher4.start();
-        philosopher5.start();
-        philosopher1.join();
-        philosopher2.join();
-        philosopher3.join();
-        philosopher4.join();
-        philosopher5.join();
-    }
-
-    @Test
-    public void resolve_deadLock_with_timeout() throws InterruptedException {
-        class ResolvingDeadLockViaTimeout extends Thread {
-            private ReentrantLock left;
-            private ReentrantLock right;
-            private Random random;
-
-            public ResolvingDeadLockViaTimeout(ReentrantLock left, ReentrantLock right) {
-                this.left = left;
-                this.right = right;
-                this.random = new Random();
-            }
-
-            @Override
-            public void run() {
-                try {
-                    while (true) {
-                        Thread.sleep(random.nextInt(1000));
-                        left.lock();
-                        try {
-                            if (right.tryLock(1000, TimeUnit.MILLISECONDS)) {
-                                try {
-                                    Thread.sleep(random.nextInt(1000));
-                                } finally {
-                                    right.unlock();
-                                }
-                            } else {
-                                System.out.println(this + " can't eat so thinking again");
-                            }
-                            System.out.println(this + " eat with " + left + " , " + right);
-                        } finally {
-                            left.unlock();
-                        }
-                    }
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
+        @Override
+        public int getId() {
+            return id;
         }
-        ReentrantLock leftChopstick = new ReentrantLock();
-        ReentrantLock rightChopstick = new ReentrantLock();
-        Thread philosopher1 = new ResolvingDeadLockViaTimeout(leftChopstick, rightChopstick);
-        Thread philosopher2 = new ResolvingDeadLockViaTimeout(rightChopstick, leftChopstick);
-        Thread philosopher3 = new ResolvingDeadLockViaTimeout(leftChopstick, rightChopstick);
-        Thread philosopher4 = new ResolvingDeadLockViaTimeout(rightChopstick, leftChopstick);
-        Thread philosopher5 = new ResolvingDeadLockViaTimeout(leftChopstick, rightChopstick);
-
-        philosopher1.start();
-        philosopher2.start();
-        philosopher3.start();
-        philosopher4.start();
-        philosopher5.start();
-        philosopher1.join();
-        philosopher2.join();
-        philosopher3.join();
-        philosopher4.join();
-        philosopher5.join();
     }
-
-
 }
