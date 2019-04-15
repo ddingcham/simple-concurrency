@@ -28,10 +28,10 @@ public class ConcurrentSortedList<T extends Comparable<T>> {
                 } finally {
                     current.unlock();
                 }
-                next.setNext(next.getNext());
+                current = next;
+                next = current.getNext();
             }
         } finally {
-
             next.unlock();
         }
     }
@@ -56,9 +56,8 @@ public class ConcurrentSortedList<T extends Comparable<T>> {
         Node current = head;
         while (current.getNext().getNext() != tail) {
             current = current.getNext();
-            if (!current.compareWith(current.getNext())) {
+            if (current.compareWith(current.getNext()))
                 return false;
-            }
         }
         return true;
     }

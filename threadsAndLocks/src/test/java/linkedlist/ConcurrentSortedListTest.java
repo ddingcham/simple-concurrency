@@ -16,7 +16,7 @@ public class ConcurrentSortedListTest {
 
         class TestThread extends Thread {
             public void run() {
-                for (int i = 0; i < 10; ++i) {
+                for (int i = 0; i < 100; ++i) {
                     list.insert(random.nextInt());
                 }
             }
@@ -43,9 +43,7 @@ public class ConcurrentSortedListTest {
         t2.join();
         t3.interrupt();
 
-        System.out.println("\r" + list.size());
-
-        assertSame(20, list.size());
+        assertEquals(200, list.size());
         assertTrue(list.isSorted());
     }
 }
