@@ -3,7 +3,10 @@ package philosopher;
 import org.junit.Test;
 
 import java.lang.reflect.Constructor;
+import java.util.Arrays;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static org.junit.Assert.fail;
@@ -101,6 +104,93 @@ public class PhilosopherTest {
                 , new ReentrantLockableChopstick(), new ReentrantLockableChopstick()
                 , 5);
         runPhilosophers();
+    }
+
+    //TODO Refactor Philosopher's Expansion Strategy
+    static class ResolvingDeadLockViaSignal extends Philosopher {
+
+        private boolean eating;
+        private ResolvingDeadLockViaSignal left;
+        private ResolvingDeadLockViaSignal right;
+        private ReentrantLock table;
+        private Condition condition;
+        private Random random;
+
+        public ResolvingDeadLockViaSignal(ReentrantLock table) {
+            super(null, null);
+            eating = false;
+            this.table = table;
+            condition = table.newCondition();
+            random = new Random();
+        }
+
+        public void setLeft(ResolvingDeadLockViaSignal left) {
+            this.left = left;
+        }
+
+        public void setRight(ResolvingDeadLockViaSignal right) {
+            this.right = right;
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (true) {
+                    think();
+                    System.out.println("complete thinking : " + this);
+                    eat();
+                    System.out.println("complete eating : " + this);
+                }
+            } catch (InterruptedException e) {
+                System.out.println(this + "is interrupted");
+            }
+        }
+
+        private void think() throws InterruptedException {
+            table.lock();
+            try {
+                eating = false;
+                left.condition.signal();
+                right.condition.signal();
+            } finally {
+                table.unlock();
+            }
+            Thread.sleep(1000);
+        }
+
+        private void eat() throws InterruptedException {
+            table.lock();
+            try {
+                while (left.eating || right.eating) {
+                    condition.await();
+                }
+                eating = true;
+            } finally {
+                table.unlock();
+            }
+            Thread.sleep(1000);
+        }
+    }
+
+    @Test
+    public void resolve_deadLock_with_signal() throws InterruptedException {
+        ResolvingDeadLockViaSignal[] philosophers = new ResolvingDeadLockViaSignal[5];
+        ReentrantLock sharedTable = new ReentrantLock();
+        Random random = new Random();
+
+        for (int i = 0; i < philosophers.length; i++) {
+            philosophers[i] = new ResolvingDeadLockViaSignal(sharedTable);
+        }
+
+        for (int i = 0; i < philosophers.length; i++) {
+            philosophers[i].setLeft(philosophers[(i + 4) % 5]);
+            philosophers[i].setRight(philosophers[(i + 1) % 5]);
+            philosophers[i].start();
+        }
+
+        for (ResolvingDeadLockViaSignal philosopher : philosophers) {
+            philosopher.join();
+        }
     }
 
     private void initPhilosophers(Class<? extends Philosopher> philosopher, Chopstick left, Chopstick right, int numOfPhilosophers) {
