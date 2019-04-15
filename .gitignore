@@ -2,4 +2,4 @@
 gradle
 .gradle
 out
-
+.DS_Store
