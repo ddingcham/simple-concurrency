@@ -1,17 +1,59 @@
 package counting;
 
-import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
-@AllArgsConstructor
+import java.util.concurrent.atomic.AtomicInteger;
+
+@RequiredArgsConstructor
 public class CountingThread extends Thread {
 
-    public static final int COUNT_CONSTANT = 10000;
-    Counter counter;
+    private final int numberOfCounts;
+    private final Counter counter;
 
     @Override
     public void run() {
-        for(int x = 0; x < COUNT_CONSTANT; ++x) {
+        for (int x = 0; x < numberOfCounts; ++x) {
             counter.increment();
         }
     }
+
+    static class SimpleCounter implements Counter {
+
+        @Getter
+        private int count = 0;
+
+        @Override
+        public void increment() {
+            ++count;
+        }
+    }
+
+    static class SynchronizedCounter extends SimpleCounter {
+        @Getter
+        private int count = 0;
+
+        @Override
+        public synchronized void increment() {
+            ++count;
+        }
+    }
+
+    static class AtomicCounter implements Counter {
+
+        private AtomicInteger count = new AtomicInteger();
+
+        @Override
+        public void increment() {
+            // ++count
+            count.incrementAndGet();
+            // count++ : getAndIncrement
+        }
+
+        @Override
+        public int getCount() {
+            return count.get();
+        }
+    }
+
 }

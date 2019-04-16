@@ -1,5 +1,6 @@
 package counting;
 
+import counting.CountingThread.*;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -8,17 +9,18 @@ import static org.junit.Assert.assertNotEquals;
 public class CountingThreadTest {
 
     @Test
-    public void no_count_lock_with_couple_of_Threads() throws InterruptedException {
-        Counter counter = new Counter();
-        CountingThread t1 = new CountingThread(counter);
-        CountingThread t2 = new CountingThread(counter);
+    public void no_count_lock_with_couple_of_threads() throws InterruptedException {
+        Counter counter = new SimpleCounter();
+        int numberOfCounts = 100000;
+        CountingThread t1 = new CountingThread(numberOfCounts, counter);
+        CountingThread t2 = new CountingThread(numberOfCounts, counter);
 
         t1.start();
         t2.start();
         t1.join();
         t2.join();
 
-        assertNotEquals(CountingThread.COUNT_CONSTANT * 2, counter.getCount());
+        assertNotEquals(numberOfCounts * 2, counter.getCount());
         /*
             race condition
             * byte code
@@ -35,17 +37,32 @@ public class CountingThreadTest {
     }
 
     @Test
-    public void count_lock_with_couple_of_Threads() throws InterruptedException {
+    public void count_lock_with_couple_of_threads() throws InterruptedException {
         Counter counter = new SynchronizedCounter();
-        CountingThread t1 = new CountingThread(counter);
-        CountingThread t2 = new CountingThread(counter);
+        int numberOfCounts = 10000;
+        CountingThread t1 = new CountingThread(numberOfCounts, counter);
+        CountingThread t2 = new CountingThread(numberOfCounts, counter);
 
         t1.start();
         t2.start();
         t1.join();
         t2.join();
 
-        assertEquals(CountingThread.COUNT_CONSTANT * 2, counter.getCount());
+        assertEquals(numberOfCounts * 2, counter.getCount());
     }
 
+    @Test
+    public void atomic_count_with_couple_of_threads() throws InterruptedException {
+        Counter counter = new AtomicCounter();
+        int numberOfCounts = 10000;
+        CountingThread t1 = new CountingThread(numberOfCounts, counter);
+        CountingThread t2 = new CountingThread(numberOfCounts, counter);
+
+        t1.start();
+        t2.start();
+        t1.join();
+        t2.join();
+
+        assertEquals(numberOfCounts * 2, counter.getCount());
+    }
 }
