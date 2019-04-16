@@ -5,10 +5,7 @@ import lombok.Getter;
 import lombok.NonNull;
 import lombok.Setter;
 
-import java.util.concurrent.locks.ReentrantLock;
-
-public class Node<T extends Comparable<T>> extends ReentrantLock {
-
+public class Node<T extends Comparable<T>> {
     private T value;
 
     @Setter(value = AccessLevel.PACKAGE, onParam_ = @NonNull)

@@ -1,26 +1,27 @@
 package linkedlist;
 
-public class ConcurrentSortedList<T extends Comparable<T>> {
-    private final Node<T> head;
-    private final Node<T> tail;
+public class ReentrantLockableConcurrentSortedList<T extends Comparable<T>> implements Insertable<T> {
+    private final ReentrantLockableNode<T> head;
+    private final ReentrantLockableNode<T> tail;
 
-    public ConcurrentSortedList() {
-        head = new Node<>();
-        tail = new Node<>();
+    public ReentrantLockableConcurrentSortedList() {
+        head = new ReentrantLockableNode<>();
+        tail = new ReentrantLockableNode<>();
         head.setNext(tail);
         tail.setPrev(head);
     }
 
+    @Override
     public void insert(T value) {
-        Node current = head;
+        ReentrantLockableNode current = head;
         current.lock();
-        Node next = current.getNext();
+        ReentrantLockableNode next = current.getNext();
         try {
             while (true) {
                 next.lock();
                 try {
-                    if (next == tail || next.compareWith(value)) {
-                        Node node = new Node(value, current, next);
+                    if (next.equals(tail) || next.compareWith(value)) {
+                        ReentrantLockableNode node = new ReentrantLockableNode(value, current, next);
                         next.setPrev(node);
                         current.setNext(node);
                         return;
@@ -37,10 +38,10 @@ public class ConcurrentSortedList<T extends Comparable<T>> {
     }
 
     public int size() {
-        Node current = tail;
+        ReentrantLockableNode current = tail;
         int count = 0;
         while (current.isNotAfter(head)) {
-            Node lockedNode = current;
+            ReentrantLockableNode lockedNode = current;
             lockedNode.lock();
             try {
                 ++count;
@@ -53,8 +54,8 @@ public class ConcurrentSortedList<T extends Comparable<T>> {
     }
 
     public boolean isSorted() {
-        Node current = head;
-        while (current.getNext().getNext() != tail) {
+        ReentrantLockableNode current = head;
+        while (!current.getNext().getNext().equals(tail)) {
             current = current.getNext();
             if (current.compareWith(current.getNext()))
                 return false;
