@@ -3,36 +3,31 @@ package philosopher;
 import lombok.AccessLevel;
 import lombok.Setter;
 
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
-
-public class SignalingPhilosopher extends Thread {
+public class IntrinsicSignalingPhilosopher extends Thread {
 
     private static final int MINIMUM_NUMBER_OF_PHILOSOPHERS = 3;
 
     @Setter(AccessLevel.PACKAGE)
-    private SignalingPhilosopher left;
+    private IntrinsicSignalingPhilosopher left;
     @Setter(AccessLevel.PACKAGE)
-    private SignalingPhilosopher right;
-    private boolean eating;
-    private ReentrantLock table;
-    private Condition condition;
+    private IntrinsicSignalingPhilosopher right;
+    private boolean eating = false;
+    private Object table;
 
-    private SignalingPhilosopher(ReentrantLock table) {
-        this.table = table;
-        condition = table.newCondition();
-        eating = false;
+    private IntrinsicSignalingPhilosopher(Object sharedTable) {
+        this.table = sharedTable;
     }
 
-    public static SignalingPhilosopher[] of(int numberOfPhilosophers) {
+    public static IntrinsicSignalingPhilosopher[] of(int numberOfPhilosophers) {
         if (numberOfPhilosophers < MINIMUM_NUMBER_OF_PHILOSOPHERS) {
             throw new IllegalArgumentException("numberOfPhilosophers must be more than " + MINIMUM_NUMBER_OF_PHILOSOPHERS);
         }
-        SignalingPhilosopher[] philosophers = new SignalingPhilosopher[numberOfPhilosophers];
-        ReentrantLock table = new ReentrantLock();
+        IntrinsicSignalingPhilosopher[] philosophers = new IntrinsicSignalingPhilosopher[numberOfPhilosophers];
+
+        Object sharedTable = new Object();
 
         for (int i = 0; i < numberOfPhilosophers; i++) {
-            philosophers[i] = new SignalingPhilosopher(table);
+            philosophers[i] = new IntrinsicSignalingPhilosopher(sharedTable);
         }
 
         for (int i = 0; i < numberOfPhilosophers; i++) {
@@ -55,31 +50,22 @@ public class SignalingPhilosopher extends Thread {
     }
 
     private void think() throws InterruptedException {
-        table.lock();
-        try {
-            eating = false;
-            left.condition.signal();
-            right.condition.signal();
-        } finally {
-            table.unlock();
-        }
+        eating = false;
         System.out.println(this + " thinking ...");
         Thread.sleep(500);
     }
 
     private void eat() throws InterruptedException {
-        table.lock();
-        try {
+        synchronized (table) {
             while (left.eating || right.eating) {
-                condition.await();
+                table.wait();
             }
             eating = true;
-        } finally {
-            table.unlock();
+            System.out.println(this + " eating ...");
+            Thread.sleep(1000);
+            eating = false;
+            System.out.println(this + " eating end ...");
+            table.notifyAll();
         }
-        System.out.println(this + " eating ...");
-        Thread.sleep(1000);
-        System.out.println(this + " eating end ...");
-        eating = false;
     }
 }

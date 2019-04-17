@@ -52,6 +52,14 @@ public class PhilosopherTest {
         assertFalse(isDeadLocked(TimeUnit.MILLISECONDS, 10000));
     }
 
+    @Test
+    public void resolve_deadLock_with_signal_via_intrinsic_lock() {
+        philosophers = IntrinsicSignalingPhilosopher.of(5);
+        runPhilosophers();
+
+        assertFalse(isDeadLocked(TimeUnit.MILLISECONDS, 10000));
+    }
+
     private void initPhilosophers(Class<? extends PhilosopherUsingChopsticks> philosopher, Chopstick left, Chopstick right, int numOfPhilosophers) {
         philosophers = new PhilosopherUsingChopsticks[numOfPhilosophers];
         try {
