@@ -20,6 +20,7 @@ public abstract class WordCounter implements Runnable {
             while (true) {
                 Page page = queue.take();
                 if (page == Page.POISON_PILL) {
+                    queue.put(Page.POISON_PILL);
                     break;
                 }
 

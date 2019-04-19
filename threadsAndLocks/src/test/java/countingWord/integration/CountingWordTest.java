@@ -4,15 +4,16 @@ import countingWord.PageParser;
 import countingWord.WikiReader;
 import countingWord.WordCounter;
 import countingWord.XMLWikiReader;
+import countingWord.counter.CounterViaBatchMode;
+import countingWord.counter.CounterViaConcurrentCollection;
+import countingWord.counter.CounterViaLock;
 import countingWord.domain.Page;
-import countingWord.domain.WordIterator;
 import org.junit.Test;
 
+import java.lang.reflect.Constructor;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.*;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,188 +22,83 @@ public class CountingWordTest {
     public static final String PATH = "enwiki-20190401-pages-articles-multistream14.xml";
 
     @Test
-    public void report_perform() throws InterruptedException {
+    public void report_perform() throws Exception {
+        ArrayBlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
         long start = System.currentTimeMillis();
-        Map resultWithSingleConsumer = count_words_with_single_consumer();
+        Map<String, Integer> resultWithSingleConsumer = new HashMap<>();
+        count_words_with_multiple_consumers(
+                CounterViaLock.of(1, resultWithSingleConsumer, channel), channel);
         long end = System.currentTimeMillis();
         long elapsedTimeViaSingleConsumer = end - start;
         System.out.println("count_words_with_single_consumer: " + elapsedTimeViaSingleConsumer + "ms");
+        synchronized (channel) {
+            channel.clear();
+        }
 
         int numOfConsumer = 4; // based-on-cpu-core : availableProcessor()
         start = System.currentTimeMillis();
-        Map resultWitMultipleConsumer = count_words_with_multiple_consumer(numOfConsumer);
+        Map<String, Integer> resultWitMultipleConsumer = new HashMap<>();
+        count_words_with_multiple_consumers(
+                CounterViaLock.of(1, resultWithSingleConsumer, channel), channel);
         end = System.currentTimeMillis();
         long elapsedTimeViaMultipleConsumer = end - start;
         System.out.println("count_words_with_multiple_consumer(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumer + "ms");
+        synchronized (channel) {
+            channel.clear();
+        }
 
         start = System.currentTimeMillis();
-        Map resultWitMultipleConsumerAndConcurrentCollection = count_words_with_multiple_consumer_and_concurrent_collection(numOfConsumer);
+        Map<String, Integer> resultWitMultipleConsumerAndConcurrentCollection = new ConcurrentHashMap<>();
+        count_words_with_multiple_consumers(
+                generateCounters(numOfConsumer, CounterViaConcurrentCollection.class, resultWitMultipleConsumerAndConcurrentCollection, channel), channel);
         end = System.currentTimeMillis();
         long elapsedTimeViaMultipleConsumerWithConcurrentCollection = end - start;
         System.out.println("count_words_with_multiple_consumer_and_concurrent_collection(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumerWithConcurrentCollection + "ms");
+        synchronized (channel) {
+            channel.clear();
+        }
 
         start = System.currentTimeMillis();
-        Map resultWitMultipleConsumerAndBatchModel = count_words_with_multiple_consumer_and_Batch_Model(numOfConsumer);
+        Map<String, Integer> resultWitMultipleConsumerAndBatchModel = new ConcurrentHashMap<>();
+        count_words_with_multiple_consumers(
+                generateCounters(numOfConsumer, CounterViaBatchMode.class, resultWitMultipleConsumerAndBatchModel, channel), channel);
         end = System.currentTimeMillis();
         long elapsedTimeViaMultipleConsumerWithBatchModel = end - start;
         System.out.println("count_words_with_multiple_consumer_and_batch_model(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumerWithBatchModel + "ms");
-
+        synchronized (channel) {
+            channel.clear();
+        }
 
         assertThat(resultWithSingleConsumer)
                 .isEqualTo(resultWitMultipleConsumer)
                 .isEqualTo(resultWitMultipleConsumerAndConcurrentCollection)
                 .isEqualTo(resultWitMultipleConsumerAndBatchModel);
-
     }
 
-    private Map count_words_with_single_consumer() throws InterruptedException {
-        ArrayBlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
-        HashMap<String, Integer> counts = new HashMap<>();
+    private void count_words_with_multiple_consumers(WordCounter[] counters, ArrayBlockingQueue<Page> channel) throws InterruptedException {
         WikiReader reader = new XMLWikiReader(PATH);
+        ExecutorService executor = Executors.newCachedThreadPool();
 
-        Thread counter = new Thread(new WordCounter(channel, counts) {
-            @Override
-            protected void countWord(String word) {
-                counts.merge(word, 1, (a, b) -> a + b);
-            }
-        });
+        for (WordCounter counter : counters) {
+            executor.execute(counter);
+        }
+
         Thread parser = new Thread(new PageParser(channel, reader));
-
-        counter.start();
         parser.start();
         parser.join();
         channel.put(Page.POISON_PILL);
-        counter.join();
-
-        return counts;
-    }
-
-    private Map count_words_with_multiple_consumer(final int numOfConsumers) throws InterruptedException {
-        ArrayBlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
-        HashMap<String, Integer> counts = new HashMap<>();
-        WikiReader reader = new XMLWikiReader(PATH);
-        ExecutorService executor = Executors.newCachedThreadPool();
-        ReentrantLock lock = new ReentrantLock();
-
-        for (int i = 0; i < numOfConsumers; ++i) {
-            executor.execute(new WordCounter(channel, counts) {
-                ReentrantLock shared = lock;
-
-                @Override
-                protected void countWord(String word) {
-                    shared.lock();
-                    try {
-                        counts.merge(word, 1, (a, b) -> a + b);
-                    } finally {
-                        shared.unlock();
-                    }
-
-                }
-            });
-        }
-        Thread parser = new Thread(new PageParser(channel, reader));
-
-        parser.start();
-        parser.join();
-        for (int i = 0; i < numOfConsumers; ++i) {
-            channel.put(Page.POISON_PILL);
-        }
         executor.shutdown();
         executor.awaitTermination(10L, TimeUnit.SECONDS);
-
-        return counts;
     }
 
-    private Map count_words_with_multiple_consumer_and_concurrent_collection(final int numOfConsumers) throws InterruptedException {
-        ArrayBlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
-        Map<String, Integer> counts = new ConcurrentHashMap<>();
-        WikiReader reader = new XMLWikiReader(PATH);
-        ExecutorService executor = Executors.newCachedThreadPool();
+    private WordCounter[] generateCounters(int numOfConsumer, Class<? extends WordCounter> counterType, Map<String, Integer> counts, ArrayBlockingQueue<Page> channel) throws Exception {
+        WordCounter[] counters = new WordCounter[numOfConsumer];
+        Constructor<? extends WordCounter> constructor = counterType.getConstructor(BlockingQueue.class, ConcurrentMap.class);
 
-        for (int i = 0; i < numOfConsumers; ++i) {
-            executor.execute(new WordCounter(channel, counts) {
-                @Override
-                protected void countWord(String word) {
-                    ConcurrentHashMap<String, Integer> concurrentHashMap = (ConcurrentHashMap) counts;
-                    while (true) {
-                        Integer concurrentCount = concurrentHashMap.get(word);
-                        if (concurrentCount == null) {
-                            if (concurrentHashMap.putIfAbsent(word, 1) == null) {
-                                break;
-                            }
-                        } else if (counts.replace(word, concurrentCount, concurrentCount + 1)) {
-                            break;
-                        }
-                    }
-                }
-            });
+        for (int i = 0; i < numOfConsumer; ++i) {
+            counters[i] = constructor.newInstance(channel, counts);
         }
-        Thread parser = new Thread(new PageParser(channel, reader));
 
-        parser.start();
-        parser.join();
-        for (int i = 0; i < numOfConsumers; ++i) {
-            channel.put(Page.POISON_PILL);
-        }
-        executor.shutdown();
-        executor.awaitTermination(7L, TimeUnit.SECONDS);
-
-        return counts;
+        return counters;
     }
-
-
-
-    private Map count_words_with_multiple_consumer_and_Batch_Model(final int numOfConsumers) throws InterruptedException {
-        ArrayBlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
-        Map<String, Integer> counts = new ConcurrentHashMap<>();
-        WikiReader reader = new XMLWikiReader(PATH);
-        ExecutorService executor = Executors.newCachedThreadPool();
-
-        for (int i = 0; i < numOfConsumers; ++i) {
-            executor.execute(new WordCounter(channel, counts) {
-                private HashMap<String, Integer> localCounts = new HashMap<>();
-
-                @Override
-                public void run() {
-                    super.run();
-                    mergeCounts();
-                }
-
-                @Override
-                protected void countWord(String word) {
-                    localCounts.merge(word, 1, (a, b) -> a + b);
-                }
-
-                private void mergeCounts() {
-                    for (Map.Entry<String, Integer> localEntry : localCounts.entrySet()) {
-                        String word = localEntry.getKey();
-                        Integer count = localEntry.getValue();
-                        ConcurrentHashMap<String, Integer> concurrentHashMap = (ConcurrentHashMap) counts;
-                        while (true) {
-                            Integer concurrentCount = concurrentHashMap.get(word);
-                            if (concurrentCount == null) {
-                                if (concurrentHashMap.putIfAbsent(word, count) == null) {
-                                    break;
-                                }
-                            } else if (counts.replace(word, concurrentCount, concurrentCount + count)) {
-                                break;
-                            }
-                        }
-                    }
-                }
-            });
-        }
-        Thread parser = new Thread(new PageParser(channel, reader));
-
-        parser.start();
-        parser.join();
-        for (int i = 0; i < numOfConsumers; ++i) {
-            channel.put(Page.POISON_PILL);
-        }
-        executor.shutdown();
-        executor.awaitTermination(7L, TimeUnit.SECONDS);
-
-        return counts;
-    }
-
 }
