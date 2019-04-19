@@ -25,6 +25,7 @@ public class XMLWikiReader implements WikiReader {
             file = new FileInputStream(xmlPath);
             this.reader = XMLInputFactory.newInstance().createXMLEventReader(file);
         } catch (FileNotFoundException | XMLStreamException invalidPath) {
+            invalidPath.printStackTrace();
             throw new IllegalArgumentException("invalid path");
         }
         isDocumentEnd = false;
@@ -48,6 +49,7 @@ public class XMLWikiReader implements WikiReader {
                 if (isEndEventOf(currentEvent, ROOT_NAME)) {
                     currentEvent = null;
                     isDocumentEnd = true;
+                    reader.close();
                     break;
                 }
             }
