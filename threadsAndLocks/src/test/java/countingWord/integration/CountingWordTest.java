@@ -41,9 +41,17 @@ public class CountingWordTest {
         long elapsedTimeViaMultipleConsumerWithConcurrentCollection = end - start;
         System.out.println("count_words_with_multiple_consumer_and_concurrent_collection(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumerWithConcurrentCollection + "ms");
 
+        start = System.currentTimeMillis();
+        Map resultWitMultipleConsumerAndBatchModel = count_words_with_multiple_consumer_and_Batch_Model(numOfConsumer);
+        end = System.currentTimeMillis();
+        long elapsedTimeViaMultipleConsumerWithBatchModel = end - start;
+        System.out.println("count_words_with_multiple_consumer_and_batch_model(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumerWithBatchModel + "ms");
+
+
         assertThat(resultWithSingleConsumer)
                 .isEqualTo(resultWitMultipleConsumer)
-                .isEqualTo(resultWitMultipleConsumerAndConcurrentCollection);
+                .isEqualTo(resultWitMultipleConsumerAndConcurrentCollection)
+                .isEqualTo(resultWitMultipleConsumerAndBatchModel);
 
     }
 
@@ -141,4 +149,60 @@ public class CountingWordTest {
 
         return counts;
     }
+
+
+
+    private Map count_words_with_multiple_consumer_and_Batch_Model(final int numOfConsumers) throws InterruptedException {
+        ArrayBlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
+        Map<String, Integer> counts = new ConcurrentHashMap<>();
+        WikiReader reader = new XMLWikiReader(PATH);
+        ExecutorService executor = Executors.newCachedThreadPool();
+
+        for (int i = 0; i < numOfConsumers; ++i) {
+            executor.execute(new WordCounter(channel, counts) {
+                private HashMap<String, Integer> localCounts = new HashMap<>();
+
+                @Override
+                public void run() {
+                    super.run();
+                    mergeCounts();
+                }
+
+                @Override
+                protected void countWord(String word) {
+                    localCounts.merge(word, 1, (a, b) -> a + b);
+                }
+
+                private void mergeCounts() {
+                    for (Map.Entry<String, Integer> localEntry : localCounts.entrySet()) {
+                        String word = localEntry.getKey();
+                        Integer count = localEntry.getValue();
+                        ConcurrentHashMap<String, Integer> concurrentHashMap = (ConcurrentHashMap) counts;
+                        while (true) {
+                            Integer concurrentCount = concurrentHashMap.get(word);
+                            if (concurrentCount == null) {
+                                if (concurrentHashMap.putIfAbsent(word, count) == null) {
+                                    break;
+                                }
+                            } else if (counts.replace(word, concurrentCount, concurrentCount + count)) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        Thread parser = new Thread(new PageParser(channel, reader));
+
+        parser.start();
+        parser.join();
+        for (int i = 0; i < numOfConsumers; ++i) {
+            channel.put(Page.POISON_PILL);
+        }
+        executor.shutdown();
+        executor.awaitTermination(7L, TimeUnit.SECONDS);
+
+        return counts;
+    }
+
 }
