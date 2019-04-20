@@ -12,9 +12,9 @@ public class WikiReaderTest {
         while (true) {
             if (reader.nextPage().isPresent()) {
                 count++;
-                continue;
+            } else {
+                break;
             }
-            break;
         }
         assertEquals(12554, count);
     }

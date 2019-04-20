@@ -4,70 +4,68 @@ import countingWord.PageParser;
 import countingWord.WikiReader;
 import countingWord.WordCounter;
 import countingWord.XMLWikiReader;
-import countingWord.counter.CounterViaBatchMode;
-import countingWord.counter.CounterViaConcurrentCollection;
-import countingWord.counter.CounterViaLock;
+import countingWord.counter.WordCounters;
 import countingWord.domain.Page;
 import org.junit.Test;
 
-import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.fail;
 
 public class CountingWordTest {
 
     public static final String PATH = "enwiki-20190401-pages-articles-multistream14.xml";
+    BlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
 
     @Test
-    public void report_perform() throws Exception {
-        ArrayBlockingQueue<Page> channel = new ArrayBlockingQueue<>(100);
-        long start = System.currentTimeMillis();
-        Map<String, Integer> resultWithSingleConsumer = new HashMap<>();
-        count_words_with_multiple_consumers(
-                CounterViaLock.of(1, resultWithSingleConsumer, channel), channel);
-        long end = System.currentTimeMillis();
-        long elapsedTimeViaSingleConsumer = end - start;
-        System.out.println("count_words_with_single_consumer: " + elapsedTimeViaSingleConsumer + "ms");
-        synchronized (channel) {
-            channel.clear();
-        }
+    public void report_perform() {
+        Map<String, Integer> resultWithSingleConsumer = new HashMap();
+        System.out.println("<count_words_with_single_consumer>");
+        runWithMarkingElapsedTime(
+                WordCounters.builder()
+                        .with(channel)
+                        .with(resultWithSingleConsumer)
+                        .buildWithLock()
+                , channel);
 
         int numOfConsumer = 4; // based-on-cpu-core : availableProcessor()
-        start = System.currentTimeMillis();
+
         Map<String, Integer> resultWitMultipleConsumer = new HashMap<>();
-        count_words_with_multiple_consumers(
-                CounterViaLock.of(1, resultWithSingleConsumer, channel), channel);
-        end = System.currentTimeMillis();
-        long elapsedTimeViaMultipleConsumer = end - start;
-        System.out.println("count_words_with_multiple_consumer(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumer + "ms");
-        synchronized (channel) {
-            channel.clear();
-        }
+        channel.clear();
+        System.out.println("<count_words_with_multiple_consumer(" + numOfConsumer + ")>");
+        runWithMarkingElapsedTime(
+                WordCounters.builder()
+                        .with(channel)
+                        .with(resultWitMultipleConsumer)
+                        .of(numOfConsumer)
+                        .buildWithLock()
+                , channel);
 
-        start = System.currentTimeMillis();
+
         Map<String, Integer> resultWitMultipleConsumerAndConcurrentCollection = new ConcurrentHashMap<>();
-        count_words_with_multiple_consumers(
-                generateCounters(numOfConsumer, CounterViaConcurrentCollection.class, resultWitMultipleConsumerAndConcurrentCollection, channel), channel);
-        end = System.currentTimeMillis();
-        long elapsedTimeViaMultipleConsumerWithConcurrentCollection = end - start;
-        System.out.println("count_words_with_multiple_consumer_and_concurrent_collection(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumerWithConcurrentCollection + "ms");
-        synchronized (channel) {
-            channel.clear();
-        }
+        channel.clear();
+        System.out.println("<count_words_with_multiple_consumer_and_concurrent_collection(" + numOfConsumer + ")> ");
+        runWithMarkingElapsedTime(
+                WordCounters.builder()
+                        .with(channel)
+                        .with(resultWitMultipleConsumerAndConcurrentCollection)
+                        .of(numOfConsumer)
+                        .buildWithConcurrentCollection()
+                , channel);
 
-        start = System.currentTimeMillis();
         Map<String, Integer> resultWitMultipleConsumerAndBatchModel = new ConcurrentHashMap<>();
-        count_words_with_multiple_consumers(
-                generateCounters(numOfConsumer, CounterViaBatchMode.class, resultWitMultipleConsumerAndBatchModel, channel), channel);
-        end = System.currentTimeMillis();
-        long elapsedTimeViaMultipleConsumerWithBatchModel = end - start;
-        System.out.println("count_words_with_multiple_consumer_and_batch_model(" + numOfConsumer + "): " + elapsedTimeViaMultipleConsumerWithBatchModel + "ms");
-        synchronized (channel) {
-            channel.clear();
-        }
+        channel.clear();
+        System.out.println("count_words_with_multiple_consumer_and_batch_model(" + numOfConsumer + ")>");
+        runWithMarkingElapsedTime(
+                WordCounters.builder()
+                        .with(channel)
+                        .with(resultWitMultipleConsumerAndBatchModel)
+                        .of(numOfConsumer)
+                        .buildWithBatchMode()
+                , channel);
 
         assertThat(resultWithSingleConsumer)
                 .isEqualTo(resultWitMultipleConsumer)
@@ -75,30 +73,29 @@ public class CountingWordTest {
                 .isEqualTo(resultWitMultipleConsumerAndBatchModel);
     }
 
-    private void count_words_with_multiple_consumers(WordCounter[] counters, ArrayBlockingQueue<Page> channel) throws InterruptedException {
+    private void runWithMarkingElapsedTime(WordCounters counters, BlockingQueue<Page> channel) {
+        long start = System.currentTimeMillis();
         WikiReader reader = new XMLWikiReader(PATH);
-        ExecutorService executor = Executors.newCachedThreadPool();
-
-        for (WordCounter counter : counters) {
-            executor.execute(counter);
+        try {
+            executes(counters, new PageParser(channel, reader));
+        } catch (InterruptedException ignore) {
+            ignore.printStackTrace();
+            fail();
         }
-
-        Thread parser = new Thread(new PageParser(channel, reader));
-        parser.start();
-        parser.join();
-        channel.put(Page.POISON_PILL);
-        executor.shutdown();
-        executor.awaitTermination(10L, TimeUnit.SECONDS);
+        long end = System.currentTimeMillis();
+        long elapsedTime = end - start;
+        System.out.println("elapsedTime : " + elapsedTime + "ms");
     }
 
-    private WordCounter[] generateCounters(int numOfConsumer, Class<? extends WordCounter> counterType, Map<String, Integer> counts, ArrayBlockingQueue<Page> channel) throws Exception {
-        WordCounter[] counters = new WordCounter[numOfConsumer];
-        Constructor<? extends WordCounter> constructor = counterType.getConstructor(BlockingQueue.class, ConcurrentMap.class);
-
-        for (int i = 0; i < numOfConsumer; ++i) {
-            counters[i] = constructor.newInstance(channel, counts);
+    private void executes(WordCounters counters, PageParser parser) throws InterruptedException {
+        ExecutorService executor = Executors.newCachedThreadPool();
+        for(WordCounter counter : counters) {
+            executor.execute(counter);
         }
-
-        return counters;
+        Thread parserThread = new Thread(parser);
+        parserThread.start();
+        parserThread.join();
+        executor.shutdown();
+        executor.awaitTermination(10L, TimeUnit.SECONDS);
     }
 }

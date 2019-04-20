@@ -3,12 +3,13 @@ package countingWord.counter;
 import countingWord.WordCounter;
 import countingWord.domain.Page;
 
+import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentMap;
 
 public class CounterViaConcurrentCollection extends WordCounter {
 
-    public CounterViaConcurrentCollection(BlockingQueue<Page> queue, ConcurrentMap<String, Integer> counts) {
+    CounterViaConcurrentCollection(BlockingQueue<Page> queue, Map<String, Integer> counts) {
         super(queue, counts);
     }
 

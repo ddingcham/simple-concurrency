@@ -7,12 +7,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public class CounterViaBatchMode extends WordCounter {
     private HashMap<String, Integer> localCounts;
 
-    public CounterViaBatchMode(BlockingQueue<Page> queue, ConcurrentMap<String, Integer> counts) {
+    CounterViaBatchMode(BlockingQueue<Page> queue, Map<String, Integer> counts) {
         super(queue, counts);
         localCounts = new HashMap<>();
     }

@@ -14,8 +14,9 @@ public class PageParser implements Runnable {
     public void run() {
         Optional<Page> page;
         while((page = reader.nextPage()).isPresent()) {
-             page.ifPresent(this::putPage);
+            putPage(page.get());
         }
+        putPage(Page.POISON_PILL);
     }
 
     private void putPage(Page page) {
