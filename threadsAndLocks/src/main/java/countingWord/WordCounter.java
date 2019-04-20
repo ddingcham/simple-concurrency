@@ -1,7 +1,7 @@
 package countingWord;
 
-import countingWord.domain.Page;
-import countingWord.domain.WordIterator;
+import countingWord.parser.Page;
+import countingWord.parser.WordIterator;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Iterator;

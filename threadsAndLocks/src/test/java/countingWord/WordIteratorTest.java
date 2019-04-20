@@ -1,6 +1,6 @@
 package countingWord;
 
-import countingWord.domain.WordIterator;
+import countingWord.parser.WordIterator;
 import org.junit.Test;
 
 import java.util.HashMap;

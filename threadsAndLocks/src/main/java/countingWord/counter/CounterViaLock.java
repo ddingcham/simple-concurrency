@@ -1,7 +1,7 @@
 package countingWord.counter;
 
 import countingWord.WordCounter;
-import countingWord.domain.Page;
+import countingWord.parser.Page;
 
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;

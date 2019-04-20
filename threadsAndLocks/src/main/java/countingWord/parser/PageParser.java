@@ -1,6 +1,6 @@
-package countingWord;
+package countingWord.parser;
 
-import countingWord.domain.Page;
+import countingWord.WikiReader;
 import lombok.RequiredArgsConstructor;
 
 import java.util.Optional;

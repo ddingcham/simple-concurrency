@@ -1,11 +1,10 @@
 package countingWord.integration;
 
-import countingWord.PageParser;
+import countingWord.Executor;
 import countingWord.WikiReader;
-import countingWord.WordCounter;
 import countingWord.XMLWikiReader;
 import countingWord.counter.WordCounters;
-import countingWord.domain.Page;
+import countingWord.parser.Page;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -74,10 +73,11 @@ public class CountingWordTest {
     }
 
     private void runWithMarkingElapsedTime(WordCounters counters, BlockingQueue<Page> channel) {
-        long start = System.currentTimeMillis();
         WikiReader reader = new XMLWikiReader(PATH);
+        Executor executor = new Executor(10L, TimeUnit.SECONDS);
+        long start = System.currentTimeMillis();
         try {
-            executes(counters, new PageParser(channel, reader));
+            executor.execute(channel, counters, reader);
         } catch (InterruptedException ignore) {
             ignore.printStackTrace();
             fail();
@@ -85,17 +85,5 @@ public class CountingWordTest {
         long end = System.currentTimeMillis();
         long elapsedTime = end - start;
         System.out.println("elapsedTime : " + elapsedTime + "ms");
-    }
-
-    private void executes(WordCounters counters, PageParser parser) throws InterruptedException {
-        ExecutorService executor = Executors.newCachedThreadPool();
-        for(WordCounter counter : counters) {
-            executor.execute(counter);
-        }
-        Thread parserThread = new Thread(parser);
-        parserThread.start();
-        parserThread.join();
-        executor.shutdown();
-        executor.awaitTermination(10L, TimeUnit.SECONDS);
     }
 }

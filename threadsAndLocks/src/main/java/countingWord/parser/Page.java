@@ -1,4 +1,4 @@
-package countingWord.domain;
+package countingWord.parser;
 
 import lombok.Data;
 

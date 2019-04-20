@@ -1,6 +1,6 @@
 package countingWord;
 
-import countingWord.domain.Page;
+import countingWord.parser.Page;
 
 import java.util.Optional;
 

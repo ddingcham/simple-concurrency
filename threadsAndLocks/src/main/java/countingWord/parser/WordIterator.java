@@ -1,4 +1,4 @@
-package countingWord.domain;
+package countingWord.parser;
 
 import java.text.BreakIterator;
 import java.util.Iterator;
