@@ -1,4 +1,4 @@
-(ns parallelSum.core (:gen-class)
+(ns parallelSum.parallelSum (:gen-class)
   (:require [clojure.core.reducers :as r]))
 
 (defn sum [numbers]
